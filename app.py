@@ -15,31 +15,28 @@ def download_media():
     video_url = data.get('url')
     requested_format = data.get('format', 'mp4')
 
-    # MP3 සහ MP4 සදහා නම්‍යශීලී (flexible) format selection
     if requested_format == 'mp3':
-        # Audio විතරක් ගන්න බැරි වුණොත්, හොඳම වීඩියෝ එකෙන් Audio extract කරයි
         fmt = 'bestaudio/best'
     else:
-        # MP4 නැතිනම් ඕනෑම හොඳම වීඩියෝ + ඕඩියෝ format එකක් තෝරාගනී
         fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
 
     ydl_opts = {
         'format': fmt,
         'quiet': True,
         'no_warnings': True,
-        # YouTube 403 / Format unavailable එන එක වළක්වන ප්‍රධාන settings
-        'extract_flat': False,
-        'force_generic_extractor': False,
+        # Bot block එක bypass කිරීමට Android client භාවිතා කිරීම:
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        }
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
             
-            # Direct link එක ලබා ගැනීම
             download_url = info.get('url')
-            
-            # Direct link එකක් නැතිනම් formats ලැයිස්තුවෙන් පළමු direct link එක ගැනීම
             if not download_url and 'formats' in info:
                 for f in info['formats']:
                     if f.get('url'):
@@ -47,7 +44,7 @@ def download_media():
                         break
 
             if not download_url:
-                return jsonify({'status': 'error', 'message': 'Direct stream link not available for this video.'}), 400
+                return jsonify({'status': 'error', 'message': 'Direct stream link not available.'}), 400
 
             return jsonify({
                 'status': 'success',
