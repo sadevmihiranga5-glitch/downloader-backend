@@ -16,9 +16,11 @@ app.post('/api/download', async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL එක අවශ්‍යයි' });
 
+    // ඔයා ලබාගත් ZM API Key එක මෙතැනට දාන්න
+    const apiKey = 'HYmMPMuoHjK';
+
     try {
-        // ZM API - All in One Endpoint
-        const apiUrl = `https://api.zm.io.vn/v1/social/autolink?url=${encodeURIComponent(url)}`;
+        const apiUrl = `https://api.zm.io.vn/v1/social/autolink?apikey=${apiKey}&url=${encodeURIComponent(url)}`;
         
         const response = await fetch(apiUrl, {
             method: 'GET',
@@ -29,7 +31,7 @@ app.post('/api/download', async (req, res) => {
 
         const data = await response.json();
 
-        // Direct Download Link එක Extract කිරීම
+        // Direct Video Link එක Extract කිරීම
         let downloadUrl = null;
         if (data && data.data && data.data.url) {
             downloadUrl = data.data.url;
@@ -46,7 +48,7 @@ app.post('/api/download', async (req, res) => {
                 type: 'video'
             });
         } else {
-            return res.status(400).json({ error: 'Video extract කරගැනීමට නොහැකි විය. වෙනත් Link එකක් උත්සාහ කරන්න.' });
+            return res.status(400).json({ error: 'Video extract ERROR.' });
         }
 
     } catch (error) {
