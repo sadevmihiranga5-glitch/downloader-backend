@@ -16,7 +16,7 @@ app.post('/api/download', async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL එක අවශ්‍යයි' });
 
-    // ඔයා ලබාගත් ZM API Key එක මෙතැනට දාන්න
+    // ඔයා Copy කරගත් API Key එක මෙතැනට දාන්න
     const apiKey = 'HYmMPMuoHjK';
 
     try {
@@ -48,7 +48,7 @@ app.post('/api/download', async (req, res) => {
                 type: 'video'
             });
         } else {
-            return res.status(400).json({ error: 'Video extract ERROR.' });
+            return res.status(400).json({ error: 'Video extract කරගැනීමට නොහැකි විය. වෙනත් Link එකක් උත්සාහ කරන්න.' });
         }
 
     } catch (error) {
