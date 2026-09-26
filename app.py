@@ -13,10 +13,10 @@ def download_media():
         return jsonify({'status': 'error', 'message': 'URL is required'}), 400
 
     video_url = data.get('url')
-    requested_format = data.get('format', 'mp4')
-    quality = data.get('quality', '720') # Default එක 720p ලෙස ගනී
+    requested_format = data.get('format', 'mp4') # 'mp4' හෝ 'mp3'
+    quality = data.get('quality', '720')          # '360' හෝ '720'
 
-    # Format logic (Audio + Video තියෙන 360p හෝ 720p තෝරාගැනීම)
+    # 1. Format Selection Logic
     if requested_format == 'mp3':
         fmt = 'bestaudio/best'
     else:
@@ -27,6 +27,7 @@ def download_media():
         else:
             fmt = 'best[vcodec!=none][acodec!=none]/best'
 
+    # 2. General yt-dlp Options
     ydl_opts = {
         'format': fmt,
         'quiet': True,
@@ -34,6 +35,7 @@ def download_media():
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
+    # 3. YouTube Fixes (Cookies + Client Emulation)
     if "youtube.com" in video_url or "youtu.be" in video_url:
         ydl_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'ios', 'mweb']}}
         if os.path.exists('cookies.txt'):
@@ -44,17 +46,28 @@ def download_media():
             info = ydl.extract_info(video_url, download=False)
             download_url = info.get('url')
 
-            if not download_url and 'formats' in info:
-                for f in reversed(info['formats']):
-                    if f.get('url') and f.get('vcodec') != 'none' and f.get('acodec') != 'none':
-                        download_url = f['url']
-                        break
-                
-                if not download_url:
+            # 4. Stream Extraction Logic
+            if requested_format == 'mp3':
+                # MP3 සඳහා pure audio stream එකක් (vcodec == 'none') සොයයි
+                if 'formats' in info:
                     for f in reversed(info['formats']):
-                        if f.get('url'):
+                        if f.get('url') and f.get('vcodec') == 'none':
                             download_url = f['url']
                             break
+            else:
+                # Video සඳහා Audio + Video දෙකම තියෙන Stream එකක් සොයයි (FB/IG Error Fix)
+                if not download_url and 'formats' in info:
+                    for f in reversed(info['formats']):
+                        if f.get('url') and f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                            download_url = f['url']
+                            break
+
+            # Fallback: තවමත් Link එකක් නැත්නම් තියෙන ඕනෑම Direct Link එකක් ගනී
+            if not download_url and 'formats' in info:
+                for f in reversed(info['formats']):
+                    if f.get('url'):
+                        download_url = f['url']
+                        break
 
             if not download_url:
                 return jsonify({'status': 'error', 'message': 'Direct stream link not found.'}), 400
