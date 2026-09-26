@@ -16,12 +16,8 @@ app.post('/api/download', async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL එක අවශ්‍යයි' });
 
-    // 🔴 මෙතැනට ඔයාගේ ZM API Key එක Paste කරන්න
-    const apiKey = process.env.ZM_API_KEY || 'HYmMPMuoHjK';
-
-    if (!apiKey || apiKey === 'YOUR_ZM_API_KEY_HERE') {
-        return res.status(500).json({ error: 'ZM API Key එක කෝඩ් එකේ සඳහන් කර නැත.' });
-    }
+    // 🔴 ඔයාගේ ZM API Key එක මෙතැනට දාන්න
+    const apiKey = 'HYmMPMuoHjK';
 
     try {
         const apiUrl = `https://api.zm.io.vn/v1/social/autolink?apikey=${apiKey}&url=${encodeURIComponent(url)}`;
@@ -34,16 +30,24 @@ app.post('/api/download', async (req, res) => {
         });
 
         const data = await response.json();
+        console.log("ZM API Response:", JSON.stringify(data)); // Vercel Logs වල බලන්න
 
-        // Direct Video Link එක හොයාගැනීම
+        // Deep extraction logic for multiple response patterns
         let downloadUrl = null;
 
-        if (data && data.data) {
-            if (typeof data.data === 'string') downloadUrl = data.data;
-            else if (data.data.url) downloadUrl = data.data.url;
-            else if (Array.isArray(data.data.medias) && data.data.medias[0]) downloadUrl = data.data.medias[0].url;
-        } else if (data && data.url) {
-            downloadUrl = data.url;
+        if (data) {
+            if (typeof data === 'string' && data.startsWith('http')) {
+                downloadUrl = data;
+            } else if (data.data) {
+                if (typeof data.data === 'string' && data.data.startsWith('http')) downloadUrl = data.data;
+                else if (data.data.url) downloadUrl = data.data.url;
+                else if (Array.isArray(data.data.medias) && data.data.medias[0]) downloadUrl = data.data.medias[0].url;
+                else if (Array.isArray(data.data) && data.data[0] && data.data[0].url) downloadUrl = data.data[0].url;
+            } else if (data.url) {
+                downloadUrl = data.url;
+            } else if (Array.isArray(data.medias) && data.medias[0]) {
+                downloadUrl = data.medias[0].url;
+            }
         }
 
         if (downloadUrl) {
@@ -53,11 +57,11 @@ app.post('/api/download', async (req, res) => {
                 type: 'video'
             });
         } else {
-            return res.status(400).json({ error: 'Video extract කරගැනීමට නොහැකි විය. වෙනත් Link එකක් උත්සාහ කරන්න.' });
+            return res.status(400).json({ error: 'Video extraction failed. Try another link.' });
         }
 
     } catch (error) {
-        return res.status(500).json({ error: 'Server එකෙහි දෝෂයක්. කරුණාකර නැවත උත්සාහ කරන්න.' });
+        return res.status(500).json({ error: 'Server timeout/error. Try again.' });
     }
 });
 
