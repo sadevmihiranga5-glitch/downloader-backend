@@ -24,12 +24,8 @@ def download_media():
         'format': fmt,
         'quiet': True,
         'no_warnings': True,
-        # Bot block එක bypass කිරීමට Android client භාවිතා කිරීම:
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web']
-            }
-        }
+        'cookiefile': 'cookies.txt',  # Download කරගත් cookies file එක
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
     try:
