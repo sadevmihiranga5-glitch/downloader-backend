@@ -15,33 +15,47 @@ def download_media():
     video_url = data.get('url')
     requested_format = data.get('format', 'mp4')
 
+    # Format selection - FB, IG සහ YT සදහා
+    if requested_format == 'mp3':
+        fmt = 'bestaudio/best'
+    else:
+        # Audio + Video එකට තියෙන MP4 එකක්, නැත්නම් වෙනත් ඕනෑම workable direct format එකක් ගනී
+        fmt = 'best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best'
+
     ydl_opts = {
+        'format': fmt,
         'quiet': True,
         'no_warnings': True,
-        'format': 'bestaudio/best' if requested_format == 'mp3' else 'best',
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
-    # Cookies තිබේ නම් භාවිතා කරයි
-    if os.path.exists('cookies.txt'):
-        ydl_opts['cookiefile'] = 'cookies.txt'
+    # YouTube සඳහා පමණක් cookies සහ extractor args සෙට් කිරීම
+    if "youtube.com" in video_url or "youtu.be" in video_url:
+        ydl_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'ios', 'mweb']}}
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
-            
-            # Direct video/audio URL එක ගැනීම
             download_url = info.get('url')
 
-            # Multi-format (Instagram/FB/YT) සදහා direct link එක සෙවීම
+            # Direct link එකක් නැත්නම් formats ලැයිස්තුවෙන් Audio + Video තියෙන හොඳම එක සොයයි
             if not download_url and 'formats' in info:
                 for f in reversed(info['formats']):
-                    if f.get('url'):
+                    if f.get('url') and f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                         download_url = f['url']
                         break
+                
+                # එසේ නොමැති නම් ඕනෑම direct link එකක් තෝරා ගනී
+                if not download_url:
+                    for f in reversed(info['formats']):
+                        if f.get('url'):
+                            download_url = f['url']
+                            break
 
             if not download_url:
-                return jsonify({'status': 'error', 'message': 'Direct link not available for this platform.'}), 400
+                return jsonify({'status': 'error', 'message': 'Direct stream link not available.'}), 400
 
             return jsonify({
                 'status': 'success',
