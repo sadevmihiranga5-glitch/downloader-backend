@@ -16,8 +16,12 @@ app.post('/api/download', async (req, res) => {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: 'URL එක අවශ්‍යයි' });
 
-    // ඔයා Copy කරගත් API Key එක මෙතැනට දාන්න
-    const apiKey = 'HYmMPMuoHjK';
+    // 🔴 මෙතැනට ඔයාගේ ZM API Key එක Paste කරන්න
+    const apiKey = process.env.ZM_API_KEY || 'HYmMPMuoHjK';
+
+    if (!apiKey || apiKey === 'YOUR_ZM_API_KEY_HERE') {
+        return res.status(500).json({ error: 'ZM API Key එක කෝඩ් එකේ සඳහන් කර නැත.' });
+    }
 
     try {
         const apiUrl = `https://api.zm.io.vn/v1/social/autolink?apikey=${apiKey}&url=${encodeURIComponent(url)}`;
@@ -31,14 +35,15 @@ app.post('/api/download', async (req, res) => {
 
         const data = await response.json();
 
-        // Direct Video Link එක Extract කිරීම
+        // Direct Video Link එක හොයාගැනීම
         let downloadUrl = null;
-        if (data && data.data && data.data.url) {
-            downloadUrl = data.data.url;
+
+        if (data && data.data) {
+            if (typeof data.data === 'string') downloadUrl = data.data;
+            else if (data.data.url) downloadUrl = data.data.url;
+            else if (Array.isArray(data.data.medias) && data.data.medias[0]) downloadUrl = data.data.medias[0].url;
         } else if (data && data.url) {
             downloadUrl = data.url;
-        } else if (data && data.medias && data.medias[0]) {
-            downloadUrl = data.medias[0].url;
         }
 
         if (downloadUrl) {
