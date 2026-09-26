@@ -3,7 +3,14 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 
 const app = express();
-app.use(cors());
+
+// CORS Issue එක විසඳීමට
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
+
 app.use(express.json());
 
 const cobaltInstances = [
@@ -13,7 +20,7 @@ const cobaltInstances = [
 
 app.post('/api/download', async (req, res) => {
     const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'URL required' });
+    if (!url) return res.status(400).json({ error: 'URL is required' });
 
     for (const instanceUrl of cobaltInstances) {
         try {
@@ -39,7 +46,7 @@ app.post('/api/download', async (req, res) => {
         }
     }
 
-    return res.status(502).json({ error: 'All Cobalt instances failed.' });
+    return res.status(502).json({ error: 'All backend instances failed.' });
 });
 
 module.exports = app;
