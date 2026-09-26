@@ -15,25 +15,18 @@ def download_media():
     video_url = data.get('url')
     requested_format = data.get('format', 'mp4')
 
-    # MP3 හෝ MP4 සදහා නම්‍යශීලී format selector එකක්
+    # MP3 සදහා bestaudio ද, MP4 සදහා ඕනෑම හොඳම වීඩියෝ format එකක්ද තෝරාගනී
     if requested_format == 'mp3':
         fmt = 'bestaudio/best'
     else:
-        # 1. Audio සහිත MP4 එකක් බලයි
-        # 2. නැතිනම් ඕනෑම Audio සහිත Video format එකක් (m3u8 / progressive) බලයි
-        # 3. නැතිනම් හොඳම Single File එක බලයි
-        fmt = 'best[ext=mp4][acodec!=none]/best[acodec!=none]/best'
+        # Strict format සීමා නැතිව ඕනෑම හොඳම එකක් තෝරයි
+        fmt = 'best'
 
     ydl_opts = {
         'format': fmt,
         'quiet': True,
         'no_warnings': True,
         'cookiefile': 'cookies.txt',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'android', 'mweb']
-            }
-        },
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
@@ -43,23 +36,15 @@ def download_media():
             
             download_url = info.get('url')
             
-            # Direct link එක කෙලින්ම නැත්නම් formats ලැයිස්තුවෙන් Audio සහිත හොඳම URL එක තෝරයි
+            # Direct URL එක නැත්නම් formats ලැයිස්තුවෙන් පලමු direct URL එක ලබා ගනී
             if not download_url and 'formats' in info:
                 for f in reversed(info['formats']):
-                    # Audio සහ Video දෙකම තියෙන URL එකක් තෝරාගනී
-                    if f.get('url') and f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                    if f.get('url'):
                         download_url = f['url']
                         break
-                
-                # Audio + Video එකක් නැත්නම් තියෙන හොඳම ඕනෑම direct link එකක් ගනී
-                if not download_url:
-                    for f in reversed(info['formats']):
-                        if f.get('url'):
-                            download_url = f['url']
-                            break
 
             if not download_url:
-                return jsonify({'status': 'error', 'message': 'Direct stream link not available for this video.'}), 400
+                return jsonify({'status': 'error', 'message': 'Direct stream link not available.'}), 400
 
             return jsonify({
                 'status': 'success',
