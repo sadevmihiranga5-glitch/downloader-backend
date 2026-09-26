@@ -16,7 +16,7 @@ def download_media():
     requested_format = data.get('format', 'mp4') # 'mp4' හෝ 'mp3'
     quality = data.get('quality', '720')          # '360' හෝ '720'
 
-    # 1. Format Selection Logic
+    # MP3 ඉල්ලුවොත් bestaudio format එක තෝරාගනී
     if requested_format == 'mp3':
         fmt = 'bestaudio/best'
     else:
@@ -27,7 +27,6 @@ def download_media():
         else:
             fmt = 'best[vcodec!=none][acodec!=none]/best'
 
-    # 2. General yt-dlp Options
     ydl_opts = {
         'format': fmt,
         'quiet': True,
@@ -35,7 +34,6 @@ def download_media():
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
-    # 3. YouTube Fixes (Cookies + Client Emulation)
     if "youtube.com" in video_url or "youtu.be" in video_url:
         ydl_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'ios', 'mweb']}}
         if os.path.exists('cookies.txt'):
@@ -46,23 +44,21 @@ def download_media():
             info = ydl.extract_info(video_url, download=False)
             download_url = info.get('url')
 
-            # 4. Stream Extraction Logic
+            # MP3/Audio ඉල්ලූ විට direct audio stream එකක්ම සොයාගනී
             if requested_format == 'mp3':
-                # MP3 සඳහා pure audio stream එකක් (vcodec == 'none') සොයයි
                 if 'formats' in info:
                     for f in reversed(info['formats']):
                         if f.get('url') and f.get('vcodec') == 'none':
                             download_url = f['url']
                             break
             else:
-                # Video සඳහා Audio + Video දෙකම තියෙන Stream එකක් සොයයි (FB/IG Error Fix)
                 if not download_url and 'formats' in info:
                     for f in reversed(info['formats']):
                         if f.get('url') and f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                             download_url = f['url']
                             break
 
-            # Fallback: තවමත් Link එකක් නැත්නම් තියෙන ඕනෑම Direct Link එකක් ගනී
+            # Fallback
             if not download_url and 'formats' in info:
                 for f in reversed(info['formats']):
                     if f.get('url'):
@@ -76,7 +72,8 @@ def download_media():
                 'status': 'success',
                 'title': info.get('title', 'Downloaded Media'),
                 'thumbnail': info.get('thumbnail', ''),
-                'download_url': download_url
+                'download_url': download_url,
+                'ext': info.get('ext', 'mp3')
             })
 
     except Exception as e:
