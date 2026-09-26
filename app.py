@@ -15,20 +15,27 @@ def download_media():
     video_url = data.get('url')
     requested_format = data.get('format', 'mp4')
 
-    # MP3 සදහා bestaudio ද, MP4 සදහා ඕනෑම හොඳම වීඩියෝ format එකක්ද තෝරාගනී
     if requested_format == 'mp3':
         fmt = 'bestaudio/best'
     else:
-        # Strict format සීමා නැතිව ඕනෑම හොඳම එකක් තෝරයි
         fmt = 'best'
 
     ydl_opts = {
         'format': fmt,
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': 'cookies.txt',
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # iOS / Android Web client එකෙන් Bot Block එක සම්පූර්ණයෙන්ම bypass කරයි
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'mweb']
+            }
+        },
+        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
     }
+
+    # cookies.txt එකක් ඇත්නම් පමණක් එය භාවිතා කරයි
+    if os.path.exists('cookies.txt'):
+        ydl_opts['cookiefile'] = 'cookies.txt'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -36,7 +43,6 @@ def download_media():
             
             download_url = info.get('url')
             
-            # Direct URL එක නැත්නම් formats ලැයිස්තුවෙන් පලමු direct URL එක ලබා ගනී
             if not download_url and 'formats' in info:
                 for f in reversed(info['formats']):
                     if f.get('url'):
