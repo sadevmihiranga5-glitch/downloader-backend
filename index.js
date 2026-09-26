@@ -17,24 +17,26 @@ app.post('/api/download', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'URL එක අවශ්‍යයි' });
 
     try {
-        const response = await fetch(`https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/index?url=${encodeURIComponent(url)}`, {
+        // ZM API - All in One Endpoint
+        const apiUrl = `https://api.zm.io.vn/v1/social/autolink?url=${encodeURIComponent(url)}`;
+        
+        const response = await fetch(apiUrl, {
             method: 'GET',
             headers: {
-                'x-rapidapi-key': 'f2e17beecamshce51f67bc096864p12a822jsnf7bddc705140',
-                'x-rapidapi-host': 'instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
             }
         });
 
         const data = await response.json();
 
-        // Extract direct download link
+        // Direct Download Link එක Extract කිරීම
         let downloadUrl = null;
-        if (data && data.media) {
-            downloadUrl = data.media;
-        } else if (data && data[0] && data[0].media) {
-            downloadUrl = data[0].media;
+        if (data && data.data && data.data.url) {
+            downloadUrl = data.data.url;
         } else if (data && data.url) {
             downloadUrl = data.url;
+        } else if (data && data.medias && data.medias[0]) {
+            downloadUrl = data.medias[0].url;
         }
 
         if (downloadUrl) {
@@ -44,7 +46,7 @@ app.post('/api/download', async (req, res) => {
                 type: 'video'
             });
         } else {
-            return res.status(400).json({ error: 'Video Link එක extract කරගැනීමට නොහැකි විය. වෙනත් link එකක් උත්සාහ කරන්න.' });
+            return res.status(400).json({ error: 'Video extract කරගැනීමට නොහැකි විය. වෙනත් Link එකක් උත්සාහ කරන්න.' });
         }
 
     } catch (error) {
