@@ -1,6 +1,6 @@
-flask
+Flask
 flask-cors
 requests
-yt-dlp
+yt-dlp>=2024.03.10
 gunicorn
 werkzeug
