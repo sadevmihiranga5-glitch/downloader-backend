@@ -1,7 +1,6 @@
 import os
-import tempfile
 import yt_dlp
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -15,58 +14,67 @@ def download_media():
 
     video_url = data.get('url')
     requested_format = data.get('format', 'mp4') # 'mp4' හෝ 'mp3'
-    quality = data.get('quality', '1080')        # '1080', '720', '360'
+    quality = data.get('quality', '720')          # '1080', '720', '360'
 
-    # Temp Folder එක සාදා ගැනීම
-    temp_dir = tempfile.mkdtemp()
-    out_template = os.path.join(temp_dir, '%(title)s.%(ext)s')
+    # Format Filters (Direct Stream වෙනුවෙන්)
+    if requested_format == 'mp3':
+        # Direct Audio-only stream
+        fmt = 'bestaudio/best'
+    else:
+        if quality == '1080':
+            # 1080p combined or best single file
+            fmt = 'best[height<=1080][vcodec!=none][acodec!=none]/best[height<=1080]/best'
+        elif quality == '720':
+            fmt = 'best[height<=720][vcodec!=none][acodec!=none]/best[height<=720]/best'
+        else: # 360p
+            fmt = 'best[height<=360][vcodec!=none][acodec!=none]/best[height<=360]/best'
 
-    # Base yt-dlp Options
     ydl_opts = {
-        'outtmpl': out_template,
+        'format': fmt,
         'quiet': True,
         'no_warnings': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
-    # YouTube Bot Protection Bypass
     if "youtube.com" in video_url or "youtu.be" in video_url:
         ydl_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'ios', 'mweb']}}
         if os.path.exists('cookies.txt'):
             ydl_opts['cookiefile'] = 'cookies.txt'
 
-    # 1. MP3 Request එකක් නම් FFmpeg මගින් Convert කරයි
-    if requested_format == 'mp3':
-        ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
-    # 2. Video (MP4) Request එකක් නම් (1080p, 720p, 360p) FFmpeg මගින් Merge කරයි
-    else:
-        if quality == '1080':
-            ydl_opts['format'] = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best'
-        elif quality == '720':
-            ydl_opts['format'] = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best'
-        else: # 360p
-            ydl_opts['format'] = 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best'
-        
-        ydl_opts['merge_output_format'] = 'mp4'
-
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            title = info.get('title', 'media')
+            info = ydl.extract_info(video_url, download=False) # download=False නිසා server එකට file එක download වෙන්නේ නැත!
+            download_url = info.get('url')
 
-            # Download වූ file එක සොයාගෙන Client ට Send කිරීම
-            for file in os.listdir(temp_dir):
-                file_path = os.path.join(temp_dir, file)
-                if requested_format == 'mp3' and file.endswith('.mp3'):
-                    return send_file(file_path, mimetype='audio/mpeg', as_attachment=True, download_name=f"{title}.mp3")
-                elif requested_format != 'mp3' and file.endswith('.mp4'):
-                    return send_file(file_path, mimetype='video/mp4', as_attachment=True, download_name=f"{title}.mp4")
+            # Video/Audio Stream URL එක සොයාගැනීම
+            if not download_url and 'formats' in info:
+                for f in reversed(info['formats']):
+                    if requested_format == 'mp3':
+                        if f.get('url') and f.get('vcodec') == 'none':
+                            download_url = f['url']
+                            break
+                    else:
+                        if f.get('url') and f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                            download_url = f['url']
+                            break
 
-            return jsonify({'status': 'error', 'message': 'File processing failed.'}), 500
+            # Fallback Check
+            if not download_url and 'formats' in info:
+                for f in reversed(info['formats']):
+                    if f.get('url'):
+                        download_url = f['url']
+                        break
+
+            if not download_url:
+                return jsonify({'status': 'error', 'message': 'Direct stream link not found.'}), 400
+
+            # Direct Download Link එක පමණක් JSON Response එකක් ලෙස යවයි
+            return jsonify({
+                'status': 'success',
+                'title': info.get('title', 'Downloaded Media'),
+                'thumbnail': info.get('thumbnail', ''),
+                'download_url': download_url
+            })
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
