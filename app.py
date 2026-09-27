@@ -101,7 +101,7 @@ def get_download_options():
     try:
         info = extract_info(source_url)
     except yt_dlp.utils.DownloadError as error:
-        return jsonify({"status": "error", "message": "මේ වීඩියෝ එක ලබා ගැනීමට නොහැකි විය (Private හෝ Block වී තිබිය හැක)."}), 422
+        return jsonify({"status": "error", "message": "ERROR)."}), 422
     except Exception:
         app.logger.exception("Media information extraction failed")
         return jsonify({"status": "error", "message": "වීඩියෝ තොරතුරු ලබා ගැනීමට නොහැකි විය."}), 502
