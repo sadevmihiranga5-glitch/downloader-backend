@@ -16,8 +16,8 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # 🔑 ShrinkMe.io API Settings
-SHORTENER_API_KEY = "595b9dd64631ced1d929da59358f6c2302382586"
-SHORTENER_API_URL = "https://shrinkme.io/api"
+SHORTENER_API_KEY = "a840099fba6be618ba1e6e1f590bcc31d6ebf412"
+SHORTENER_API_URL = "https://gplinks.in/api"
 
 
 def shorten_url(long_url):
