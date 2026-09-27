@@ -15,13 +15,13 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# 🔑 ShrinkMe.io API Integration Settings
+# 🔑 ShrinkMe.io API Settings
 SHORTENER_API_KEY = "595b9dd64631ced1d929da59358f6c2302382586"
 SHORTENER_API_URL = "https://shrinkme.io/api"
 
 
 def shorten_url(long_url):
-    """Helper function to convert generated links into monetized ShrinkMe links."""
+    """Download Link එක ShrinkMe Link එකක් බවට පත් කරන Helper Function එක"""
     if not long_url:
         return long_url
     try:
@@ -171,15 +171,19 @@ def get_download_options():
         }
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": [media]})
 
-    video_formats_exist = any(
-        isinstance(item, dict) and item.get("vcodec") not in (None, "none")
-        for item in info.get("formats", [])
-    ) or info.get("vcodec") not in (None, "none")
-    available = sorted(detected_video_heights(info))
-    if not available and video_formats_exist:
-        available = [None]
-    if not available:
+    available_heights = sorted(detected_video_heights(info))
+    if not available_heights:
         return jsonify({"status": "error", "message": "No supported MP4 quality was found."}), 422
+
+    max_height = max(available_heights)
+
+    # 🎯 ඔයා ඉල්ලපු Resolution Logic එක:
+    if max_height > 1080:
+        # වීඩියෝ එක 1080p වලට වැඩියි නම් (4K / 2K), 1080p සහ 480p පමණක් පෙන්වයි
+        options_to_show = [1080, 480]
+    else:
+        # 1080p හෝ ඊට අඩුයි නම්, තියෙන ඉහළම Quality එක (Max height) ලබාදෙයි
+        options_to_show = [max_height]
 
     requested_quality = data.get("quality")
     if requested_quality is not None:
@@ -187,19 +191,19 @@ def get_download_options():
             requested_quality = int(requested_quality)
         except (TypeError, ValueError):
             return jsonify({"status": "error", "message": "Quality must be a number."}), 400
-        if available != [None] and requested_quality not in available:
-            lower_options = [height for height in available if height <= requested_quality]
-            requested_quality = max(lower_options) if lower_options else min(available)
-        elif available == [None]:
-            requested_quality = None
-            
+
+        # Requested Quality එක නැත්නම් ඊට ආසන්න අඩුම quality එකට Auto Fallback වේ
+        if requested_quality not in available_heights:
+            lower_options = [h for h in available_heights if h <= requested_quality]
+            requested_quality = max(lower_options) if lower_options else min(available_heights)
+
         raw_download_url = download_file_url(source_url, "mp4", requested_quality)
         return jsonify({
             "status": "success",
             "title": title,
             "thumbnail": thumbnail,
             "format": "mp4",
-            "quality": f"MP4 ({requested_quality}p)" if requested_quality else "Best available MP4",
+            "quality": f"MP4 ({requested_quality}p)",
             "download_url": shorten_url(raw_download_url),
         })
 
@@ -207,7 +211,7 @@ def get_download_options():
         "status": "success",
         "title": title,
         "thumbnail": thumbnail,
-        "medias": [media_option(source_url, quality) for quality in available],
+        "medias": [media_option(source_url, q) for q in options_to_show],
     })
 
 
@@ -222,8 +226,6 @@ def download_file():
     quality = request.args.get("quality", type=int)
     if output_format not in ("mp4", "mp3"):
         return jsonify({"status": "error", "message": "Format must be mp4 or mp3."}), 400
-    if output_format == "mp4" and request.args.get("quality") and (quality is None or quality < 1):
-        return jsonify({"status": "error", "message": "Quality must be a positive number."}), 400
 
     temp_dir = Path(tempfile.mkdtemp(prefix="downmaster-"))
     options = {
