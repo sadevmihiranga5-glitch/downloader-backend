@@ -20,13 +20,19 @@ ALLOWED_HOSTS = (
     "instagr.am",
 )
 
+# Wɔde YTDL_BASE_OPTIONS asiesie no sie wɔ soro ha na wode iOS/Android player_client frafra mu
 YTDL_BASE_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
     "extract_flat": False,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["ios", "android"]
+        }
+    },
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-us,en;q=0.5",
     }
@@ -109,7 +115,7 @@ def get_download_options():
         }
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": [media]})
 
-    # MP4 Video Option (Resolution filtering as requested earlier)
+    # MP4 Video Option
     available_items = []
     for f in raw_formats:
         url = f.get("url")
@@ -179,20 +185,3 @@ def get_download_options():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")))
-
-YTDL_BASE_OPTIONS = {
-    "quiet": True,
-    "no_warnings": True,
-    "noplaylist": True,
-    # YouTube Bot Block එක මඟහැරීමට Client Type එක iOS/Android ලෙස වෙනස් කිරීම
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["ios", "android"]
-        }
-    },
-    "http_headers": {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-us,en;q=0.5",
-    }
-}
