@@ -42,6 +42,7 @@ YTDL_BASE_OPTIONS = {
     }
 }
 
+# cookies.txt ෆাইল එක තියෙනවා නම් ස්වයංක්‍රීයව බාර ගනී
 if os.path.exists("cookies.txt"):
     YTDL_BASE_OPTIONS["cookiefile"] = "cookies.txt"
 
@@ -99,9 +100,11 @@ def get_download_options():
 
     try:
         info = extract_info(source_url)
-    except yt_dlp.utils.DownloadError:
-        return jsonify({"status": "error", "message": "Unable to fetch media. The content may be private or restricted."}), 422
-    except Exception:
+    except yt_dlp.utils.DownloadError as error:
+        # මෙතැනින් සැබෑ Error එක Railway Logs වලට Print කරනු ලැබේ (Debug කිරීම සඳහා)
+        app.logger.error(f"YouTube/Platform DownloadError details: {str(error)}")
+        return jsonify({"status": "error", "message": f"Unable to fetch media: {str(error)}"}), 422
+    except Exception as e:
         app.logger.exception("Media information extraction failed")
         return jsonify({"status": "error", "message": "An error occurred while processing the video information."}), 502
 
@@ -111,7 +114,7 @@ def get_download_options():
 
     medias = []
 
-    # --- MP3 Audio Formats (Options: 320kbps, 192kbps, 128kbps) ---
+    # --- MP3 Audio Formats ---
     if output_format == "mp3":
         audio_streams = []
         for f in reversed(raw_formats):
@@ -141,7 +144,7 @@ def get_download_options():
 
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": medias})
 
-    # --- MP4 Video Formats (1080p/Max Quality & 480p Logic) ---
+    # --- MP4 Video Formats ---
     available_items = []
     for f in raw_formats:
         url = f.get("url")
