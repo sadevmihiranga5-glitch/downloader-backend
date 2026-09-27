@@ -20,23 +20,32 @@ ALLOWED_HOSTS = (
     "instagr.am",
 )
 
-# Wɔde YTDL_BASE_OPTIONS asiesie no sie wɔ soro ha na wode iOS/Android player_client frafra mu
+# Server Blocks මඟහැරීමට අවශ්‍ය නිවැරදි Options
 YTDL_BASE_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
     "extract_flat": False,
+    # YouTube / Instagram Bot Block මඟහැරීමට Clients වෙනස් කිරීම
     "extractor_args": {
         "youtube": {
             "player_client": ["ios", "android"]
+        },
+        "instagram": {
+            "app_version": "269.0.0.18.75"
         }
     },
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-us,en;q=0.5",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Fetch-Mode": "navigate",
     }
 }
+
+# cookies.txt file එක root folder එකේ තිබේ නම් පමණක් එය භාවිතා කිරීම
+if os.path.exists("cookies.txt"):
+    YTDL_BASE_OPTIONS["cookiefile"] = "cookies.txt"
 
 
 def validate_source_url(raw_url):
@@ -70,7 +79,7 @@ def health_check():
 def get_download_options():
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not isinstance(data.get("url"), str):
-        return jsonify({"status": "error", "message": "URL lagel."}), 400
+        return jsonify({"status": "error", "message": "URL එක ඇතුළත් කරන්න."}), 400
 
     try:
         source_url = validate_source_url(data["url"].strip())
@@ -79,7 +88,7 @@ def get_download_options():
 
     output_format = str(data.get("format", "mp4")).lower()
     if output_format not in ("mp4", "mp3"):
-        return jsonify({"status": "error", "message": "Format mp4 kinva mp3 asava."}), 400
+        return jsonify({"status": "error", "message": "Format එක mp4 හෝ mp3 විය යුතුය."}), 400
 
     try:
         info = extract_info(source_url)
@@ -87,7 +96,7 @@ def get_download_options():
         return jsonify({"status": "error", "message": str(error)}), 422
     except Exception:
         app.logger.exception("Media information extraction failed")
-        return jsonify({"status": "error", "message": "Video info milali nahi."}), 502
+        return jsonify({"status": "error", "message": "වීඩියෝ තොරතුරු ලබා ගැනීමට නොහැකි විය."}), 502
 
     title = str(info.get("title") or "video")
     thumbnail = info.get("thumbnail") or ""
