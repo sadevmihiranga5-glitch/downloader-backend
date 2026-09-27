@@ -20,11 +20,11 @@ ALLOWED_HOSTS = (
     "instagr.am",
 )
 
-# YouTube සහ Facebook Block වීම වැළැක්වීමට User-Agent Headers
 YTDL_BASE_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
+    "extract_flat": False,
     "http_headers": {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -64,7 +64,7 @@ def health_check():
 def get_download_options():
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not isinstance(data.get("url"), str):
-        return jsonify({"status": "error", "message": "URL එක ඇතුළත් කරන්න."}), 400
+        return jsonify({"status": "error", "message": "URL lagel."}), 400
 
     try:
         source_url = validate_source_url(data["url"].strip())
@@ -73,7 +73,7 @@ def get_download_options():
 
     output_format = str(data.get("format", "mp4")).lower()
     if output_format not in ("mp4", "mp3"):
-        return jsonify({"status": "error", "message": "Format එක mp4 හෝ mp3 විය යුතුය."}), 400
+        return jsonify({"status": "error", "message": "Format mp4 kinva mp3 asava."}), 400
 
     try:
         info = extract_info(source_url)
@@ -81,18 +81,18 @@ def get_download_options():
         return jsonify({"status": "error", "message": str(error)}), 422
     except Exception:
         app.logger.exception("Media information extraction failed")
-        return jsonify({"status": "error", "message": "වීඩියෝ තොරතුරු ලබා ගැනීමට නොහැකි විය."}), 502
+        return jsonify({"status": "error", "message": "Video info milali nahi."}), 502
 
     title = str(info.get("title") or "video")
     thumbnail = info.get("thumbnail") or ""
-    formats = info.get("formats", [])
+    raw_formats = info.get("formats", [])
 
     medias = []
 
-    # --- MP3 Select කළ විට ---
+    # MP3 audio option
     if output_format == "mp3":
         best_audio = None
-        for f in reversed(formats):
+        for f in reversed(raw_formats):
             if f.get("acodec") != "none" and f.get("url"):
                 best_audio = f.get("url")
                 break
@@ -104,59 +104,70 @@ def get_download_options():
             "url": best_audio,
             "type": "audio",
             "extension": "mp3",
-            "quality": "Direct Audio Stream",
+            "quality": "MP3 320 kbps",
             "mimeType": "audio/mpeg",
         }
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": [media]})
 
-    # --- MP4 (Facebook, YouTube, Instagram) Select කළ විට ---
-    seen_urls = set()
-    seen_qualities = set()
-
-    for f in formats:
+    # MP4 Video Option (Resolution filtering as requested earlier)
+    available_items = []
+    for f in raw_formats:
         url = f.get("url")
-        if not url or url in seen_urls:
+        if not url:
             continue
 
+        height = f.get("height") or 0
         vcodec = f.get("vcodec")
         format_id = str(f.get("format_id") or "").lower()
         format_note = str(f.get("format_note") or "").upper()
-        height = f.get("height") or 0
 
-        # Facebook HD/SD Direct Links අඳුරගැනීම
-        quality_label = None
         if "hd" in format_id or "hd" in format_note:
-            quality_label = "FB HD Quality (1080p/720p)"
+            height = 1080 if height == 0 else height
         elif "sd" in format_id or "sd" in format_note:
-            quality_label = "FB SD Quality (360p/480p)"
-        elif height > 0:
-            quality_label = f"MP4 ({height}p)"
-        elif vcodec not in (None, "none"):
-            quality_label = "MP4 Direct Video"
+            height = 480 if height == 0 else height
 
-        if quality_label and quality_label not in seen_qualities:
-            seen_urls.add(url)
-            seen_qualities.add(quality_label)
-            medias.append({
+        if height > 0 or vcodec not in (None, "none"):
+            available_items.append({
                 "url": url,
-                "type": "video",
-                "extension": f.get("ext", "mp4"),
-                "quality": quality_label,
-                "height": height
+                "height": height,
+                "ext": f.get("ext", "mp4")
             })
 
-    # Formats මුකුත්ම හමු නොවුණොත් Direct URL එක ලබාදීම
+    if available_items:
+        available_items.sort(key=lambda x: x["height"], reverse=True)
+        max_height = available_items[0]["height"]
+
+        target_heights = []
+        if max_height > 1080:
+            target_heights = [1080, 480]
+        elif max_height > 0:
+            target_heights = [max_height]
+
+        seen_heights = set()
+        for h in target_heights:
+            match_item = next((item for item in available_items if item["height"] == h), None)
+            if not match_item and available_items:
+                match_item = available_items[0]
+
+            if match_item and match_item["url"] not in seen_heights:
+                seen_heights.add(match_item["url"])
+                q_label = f"MP4 ({match_item['height']}p)" if match_item['height'] > 0 else "MP4 HD Quality"
+                medias.append({
+                    "url": match_item["url"],
+                    "type": "video",
+                    "extension": match_item["ext"],
+                    "quality": q_label,
+                    "height": match_item["height"]
+                })
+
     if not medias and info.get("url"):
         medias.append({
             "url": info.get("url"),
             "type": "video",
             "extension": "mp4",
-            "quality": "Direct HD Quality",
+            "quality": "Best Available MP4",
             "height": info.get("height", 720)
         })
-
-    # Height එක අනුව වැඩිම එක උඩට එනසේ සකස් කිරීම
-    medias.sort(key=lambda x: x.get("height", 0), reverse=True)
 
     return jsonify({
         "status": "success",
