@@ -20,13 +20,14 @@ ALLOWED_HOSTS = (
     "instagr.am",
 )
 
-# Server Blocks මඟහැරීමට අවශ්‍ය නිවැරදි Options
+# FB, YT, IG ඔක්කොටම ගැලපෙන Base Options
 YTDL_BASE_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
     "extract_flat": False,
-    # YouTube / Instagram Bot Block මඟහැරීමට Clients වෙනස් කිරීම
+    "check_formats": False,
+    # YouTube, Instagram, Facebook වෙනුවෙන්ම විශේෂ Extractor Args
     "extractor_args": {
         "youtube": {
             "player_client": ["ios", "android"]
@@ -36,14 +37,13 @@ YTDL_BASE_OPTIONS = {
         }
     },
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
         "Sec-Fetch-Mode": "navigate",
     }
 }
 
-# cookies.txt file එක root folder එකේ තිබේ නම් පමණක් එය භාවිතා කිරීම
 if os.path.exists("cookies.txt"):
     YTDL_BASE_OPTIONS["cookiefile"] = "cookies.txt"
 
@@ -63,6 +63,14 @@ def extract_info(source_url):
     options = YTDL_BASE_OPTIONS.copy()
     options["skip_download"] = True
     
+    # Facebook වලට විශේෂ Header වෙනසක්
+    if "facebook.com" in source_url or "fb.watch" in source_url:
+        options["http_headers"] = {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
     with yt_dlp.YoutubeDL(options) as downloader:
         info = downloader.extract_info(source_url, download=False)
     if not isinstance(info, dict):
@@ -93,7 +101,7 @@ def get_download_options():
     try:
         info = extract_info(source_url)
     except yt_dlp.utils.DownloadError as error:
-        return jsonify({"status": "error", "message": str(error)}), 422
+        return jsonify({"status": "error", "message": "මේ වීඩියෝ එක ලබා ගැනීමට නොහැකි විය (Private හෝ Block වී තිබිය හැක)."}), 422
     except Exception:
         app.logger.exception("Media information extraction failed")
         return jsonify({"status": "error", "message": "වීඩියෝ තොරතුරු ලබා ගැනීමට නොහැකි විය."}), 502
@@ -141,7 +149,7 @@ def get_download_options():
         elif "sd" in format_id or "sd" in format_note:
             height = 480 if height == 0 else height
 
-        if height > 0 or vcodec not in (None, "none"):
+        if height > 0 or vcodec not in (None, "none") or "fb" in source_url:
             available_items.append({
                 "url": url,
                 "height": height,
@@ -175,6 +183,7 @@ def get_download_options():
                     "height": match_item["height"]
                 })
 
+    # Facebook Fallback Direct URL
     if not medias and info.get("url"):
         medias.append({
             "url": info.get("url"),
