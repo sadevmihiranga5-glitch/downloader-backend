@@ -28,7 +28,7 @@ YTDL_BASE_OPTIONS = {
     "check_formats": False,
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "android"]
+            "player_client": ["ios", "android", "web"]
         },
         "instagram": {
             "app_version": "269.0.0.18.75"
