@@ -111,7 +111,7 @@ def get_download_options():
 
     medias = []
 
-    # --- 1. MP3 Audio Formats (3 Options) ---
+    # --- MP3 Audio Formats (Options: 320kbps, 192kbps, 128kbps) ---
     if output_format == "mp3":
         audio_streams = []
         for f in reversed(raw_formats):
@@ -141,7 +141,7 @@ def get_download_options():
 
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": medias})
 
-    # --- 2. MP4 Video Formats (1080p, Max Quality & 480p Logic) ---
+    # --- MP4 Video Formats (1080p/Max Quality & 480p Logic) ---
     available_items = []
     for f in raw_formats:
         url = f.get("url")
@@ -166,24 +166,19 @@ def get_download_options():
             })
 
     if available_items:
-        # Sort e toowgol height
         available_items.sort(key=lambda x: x["height"], reverse=True)
         max_height = available_items[0]["height"]
 
-        # Logic no naamri maa nii:
-        # 1. So max_height > 1080p: Heɓor [1080p, 480p]
-        # 2. So max_height <= 1080p: Heɓor [max_height, 480p]
         target_heights = []
         if max_height > 1080:
             target_heights = [1080, 480]
         else:
             target_heights = [max_height]
-            if max_height != 480:
+            if max_height != 480 and max_height > 0:
                 target_heights.append(480)
 
         seen_urls = set()
         for target in target_heights:
-            # Ɓeeɗoo ko ƴeewtat ko ɓuri ɓadaade target height o
             closest_item = min(available_items, key=lambda x: abs(x["height"] - target) if x["height"] > 0 else 9999)
             if closest_item["url"] not in seen_urls:
                 seen_urls.add(closest_item["url"])
