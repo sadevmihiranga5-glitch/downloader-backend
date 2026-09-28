@@ -175,17 +175,28 @@ def get_download_options():
             continue
 
         height = f.get("height") or 0
+        width = f.get("width") or 0
         vcodec = f.get("vcodec")
         format_id = str(f.get("format_id") or "").lower()
         format_note = str(f.get("format_note") or "").upper()
 
-        if "hd" in format_id or "hd" in format_note:
-            height = 1080 if height == 0 else height
-        elif "sd" in format_id or "sd" in format_note:
-            height = 480 if height == 0 else height
+        # Facebook හෝ YouTube වල height එක 0 ሆ් නැති වුණත් format_note හෝ width එකෙන් height එක අනුමාන කරගමු
+        if height == 0:
+            if "1080" in format_note or "HD" in format_note or width >= 1920:
+                height = 1080
+            elif "720" in format_note or width >= 1280:
+                height = 720
+            elif "480" in format_note or width >= 854:
+                height = 480
+            elif "360" in format_note or width >= 640:
+                height = 360
+            elif "hd" in format_id:
+                height = 1080
+            elif "sd" in format_id:
+                height = 480
 
-        # ඉතා කුඩා රෙසොලුෂන් (140p වලට වඩා අඩු, උදා: 27p, 45p, 90p) පෙරහන් කර ඉවත් කිරීම
-        if height >= 140 and (vcodec not in (None, "none") or "fb" in source_url):
+        # Facebook හෝ YouTube වල වීඩියෝ ස්ට්‍රීම්ස් අල්ලා ගැනීම
+        if height > 0 and (vcodec not in (None, "none") or "facebook.com" in source_url or "fb.watch" in source_url):
             available_items.append({
                 "url": url,
                 "height": height,
