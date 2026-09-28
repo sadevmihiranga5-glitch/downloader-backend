@@ -126,7 +126,6 @@ def get_download_options():
     try:
         info = extract_info(source_url)
     except yt_dlp.utils.DownloadError as error:
-        # මෙතැනින් සැබෑ Error එක Railway Logs වලට Print කරනු ලැබේ (Debug කිරීම සඳහා)
         app.logger.error(f"YouTube/Platform DownloadError details: {str(error)}")
         return jsonify({"status": "error", "message": f"Unable to fetch media: {str(error)}"}), 422
     except Exception as e:
@@ -197,27 +196,31 @@ def get_download_options():
         available_items.sort(key=lambda x: x["height"], reverse=True)
         max_height = available_items[0]["height"]
 
-        target_heights = []
-        if max_height > 1080:
-            target_heights = [1080, 480]
-        else:
-            target_heights = [max_height]
-            if max_height != 480 and max_height > 0:
-                target_heights.append(480)
-
+        # ඉල්ලූ ආකාරයට resolutions තෝරාගැනීම:
+        # 1080p වලට වඩා වැඩියි නම් එම උපරිම අගයත්, 1080p, 720p, 480p (සහ ඊට පහළ) සියලුම අදාළ formats ඇතුළත් වේ.
+        standard_targets = [2160, 1440, 1080, 720, 480, 360]
+        
+        # වීඩියෝවට අදාළව තිබෙන සියලුම heights සොයාගමු
+        present_heights = sorted(list(set(item["height"] for item in available_items if item["height"] > 0)), reverse=True)
+        
         seen_urls = set()
-        for target in target_heights:
-            closest_item = min(available_items, key=lambda x: abs(x["height"] - target) if x["height"] > 0 else 9999)
-            if closest_item["url"] not in seen_urls:
-                seen_urls.add(closest_item["url"])
-                q_label = f"MP4 ({closest_item['height']}p)" if closest_item['height'] > 0 else "MP4 HD"
-                medias.append({
-                    "url": closest_item["url"],
-                    "type": "video",
-                    "extension": closest_item["ext"],
-                    "quality": q_label,
-                    "height": closest_item["height"]
-                })
+        seen_heights = set()
+        
+        for h in present_heights:
+            # වඩාත් ගැළපෙන item එක ලබාගැනීම
+            matches = [item for item in available_items if item["height"] == h]
+            if matches:
+                item = matches[0]
+                if item["url"] not in seen_urls and h not in seen_heights:
+                    seen_urls.add(item["url"])
+                    seen_heights.add(h)
+                    medias.append({
+                        "url": item["url"],
+                        "type": "video",
+                        "extension": item["ext"],
+                        "quality": f"MP4 ({h}p)",
+                        "height": h
+                    })
 
     if not medias and info.get("url"):
         medias.append({
