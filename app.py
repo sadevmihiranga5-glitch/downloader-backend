@@ -2,6 +2,7 @@ import os
 import re
 from urllib.parse import urlparse
 
+import requests
 import yt_dlp
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -79,6 +80,30 @@ def extract_info(source_url):
 @app.get("/")
 def health_check():
     return jsonify({"status": "running", "message": "DownMaster Flask backend active"})
+
+
+@app.get("/api/proxy-download")
+def proxy_download():
+    target_url = request.args.get("url")
+    filename = request.args.get("filename", "video.mp4")
+    if not target_url:
+        return "URL parameter is missing", 400
+    
+    try:
+        req = requests.get(target_url, stream=True, timeout=30)
+        
+        def generate():
+            for chunk in req.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+                    
+        return app.response_class(
+            generate(),
+            mimetype=req.headers.get('content-type', 'application/octet-stream'),
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        return f"Proxy download failed: {str(e)}", 502
 
 
 @app.post("/api/download")
