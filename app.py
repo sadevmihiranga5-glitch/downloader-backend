@@ -43,7 +43,6 @@ YTDL_BASE_OPTIONS = {
     }
 }
 
-# cookies.txt ෆাইল එක තියෙනවා නම් ස්වයංක්‍රීයව බාර ගනී
 if os.path.exists("cookies.txt"):
     YTDL_BASE_OPTIONS["cookiefile"] = "cookies.txt"
 
@@ -185,7 +184,8 @@ def get_download_options():
         elif "sd" in format_id or "sd" in format_note:
             height = 480 if height == 0 else height
 
-        if height > 0 or vcodec not in (None, "none") or "fb" in source_url:
+        # ඉතා කුඩා රෙසොලුෂන් (140p වලට වඩා අඩු, උදා: 27p, 45p, 90p) පෙරහන් කර ඉවත් කිරීම
+        if height >= 140 and (vcodec not in (None, "none") or "fb" in source_url):
             available_items.append({
                 "url": url,
                 "height": height,
@@ -193,34 +193,43 @@ def get_download_options():
             })
 
     if available_items:
-        available_items.sort(key=lambda x: x["height"], reverse=True)
-        max_height = available_items[0]["height"]
+        height_map = {}
+        for item in available_items:
+            h = item["height"]
+            if h > 0 and h not in height_map:
+                height_map[h] = item
 
-        # ඉල්ලූ ආකාරයට resolutions තෝරාගැනීම:
-        # 1080p වලට වඩා වැඩියි නම් එම උපරිම අගයත්, 1080p, 720p, 480p (සහ ඊට පහළ) සියලුම අදාළ formats ඇතුළත් වේ.
-        standard_targets = [2160, 1440, 1080, 720, 480, 360]
-        
-        # වීඩියෝවට අදාළව තිබෙන සියලුම heights සොයාගමු
-        present_heights = sorted(list(set(item["height"] for item in available_items if item["height"] > 0)), reverse=True)
-        
+        sorted_heights = sorted(height_map.keys(), reverse=True)
+        max_height = sorted_heights[0] if sorted_heights else 0
+
+        target_heights = []
+        if max_height >= 1080:
+            for d in [max_height, 1080, 720, 480]:
+                if d in sorted_heights and d not in target_heights:
+                    target_heights.append(d)
+                else:
+                    lower = [h for h in sorted_heights if h <= d]
+                    if lower:
+                        best_lower = max(lower)
+                        if best_lower not in target_heights:
+                            target_heights.append(best_lower)
+        else:
+            target_heights = sorted_heights[:3]
+
+        target_heights = sorted(list(set(target_heights)), reverse=True)
+
         seen_urls = set()
-        seen_heights = set()
-        
-        for h in present_heights:
-            # වඩාත් ගැළපෙන item එක ලබාගැනීම
-            matches = [item for item in available_items if item["height"] == h]
-            if matches:
-                item = matches[0]
-                if item["url"] not in seen_urls and h not in seen_heights:
-                    seen_urls.add(item["url"])
-                    seen_heights.add(h)
-                    medias.append({
-                        "url": item["url"],
-                        "type": "video",
-                        "extension": item["ext"],
-                        "quality": f"MP4 ({h}p)",
-                        "height": h
-                    })
+        for h in target_heights:
+            item = height_map[h]
+            if item["url"] not in seen_urls:
+                seen_urls.add(item["url"])
+                medias.append({
+                    "url": item["url"],
+                    "type": "video",
+                    "extension": item["ext"],
+                    "quality": f"MP4 ({h}p)",
+                    "height": h
+                })
 
     if not medias and info.get("url"):
         medias.append({
