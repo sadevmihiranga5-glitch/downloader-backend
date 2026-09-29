@@ -1,7 +1,6 @@
 import os
 import re
 from urllib.parse import urlparse
-
 import requests
 import yt_dlp
 from flask import Flask, jsonify, request
@@ -19,6 +18,9 @@ ALLOWED_HOSTS = (
     "fb.watch",
     "instagram.com",
     "instagr.am",
+    "tiktok.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
 )
 
 YTDL_BASE_OPTIONS = {
@@ -27,22 +29,33 @@ YTDL_BASE_OPTIONS = {
     "noplaylist": True,
     "extract_flat": False,
     "check_formats": False,
+    "retries": 3,
+    "fragment_retries": 3,
+    "socket_timeout": 30,
+    "force_ipv4": True,  # YouTube datacenter IPv6 වලට ගොඩක් block කරනවා
     "extractor_args": {
         "youtube": {
-            "player_client": ["ios", "android", "web"]
+            # 2026 දී හොඳට work වෙන clients
+            "player_client": ["android_vr", "tv_downgraded", "mweb", "web"],
         },
         "instagram": {
             "app_version": "269.0.0.18.75"
         }
     },
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
         "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Sec-Fetch-Dest": "document",
+        "Upgrade-Insecure-Requests": "1",
     }
 }
 
+# cookies.txt තියෙනවා නම් automatically load වෙනවා
 if os.path.exists("cookies.txt"):
     YTDL_BASE_OPTIONS["cookiefile"] = "cookies.txt"
 
@@ -50,27 +63,36 @@ if os.path.exists("cookies.txt"):
 def validate_source_url(raw_url):
     parsed = urlparse(raw_url)
     hostname = (parsed.hostname or "").lower().rstrip(".")
-    if parsed.scheme != "https" or not any(
+    if parsed.scheme not in ("https", "http") or not any(
         hostname == domain or hostname.endswith("." + domain)
         for domain in ALLOWED_HOSTS
     ):
-        raise ValueError("Please provide a valid public YouTube, Facebook, or Instagram URL.")
+        raise ValueError("Please provide a valid public YouTube, Facebook, Instagram or TikTok URL.")
     return raw_url
 
 
 def extract_info(source_url):
     options = YTDL_BASE_OPTIONS.copy()
     options["skip_download"] = True
-    
+
+    # Facebook සඳහා mobile User-Agent
     if "facebook.com" in source_url or "fb.watch" in source_url:
         options["http_headers"] = {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         }
 
+    # TikTok සඳහා
+    if "tiktok.com" in source_url:
+        options["http_headers"] = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Referer": "https://www.tiktok.com/",
+        }
+
     with yt_dlp.YoutubeDL(options) as downloader:
         info = downloader.extract_info(source_url, download=False)
+
     if not isinstance(info, dict):
         raise ValueError("Failed to retrieve media details from the provided URL.")
     return info
@@ -87,15 +109,21 @@ def proxy_download():
     filename = request.args.get("filename", "video.mp4")
     if not target_url:
         return "URL parameter is missing", 400
-    
+
     try:
-        req = requests.get(target_url, stream=True, timeout=30)
-        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.youtube.com/",
+        }
+        req = requests.get(target_url, stream=True, timeout=30, headers=headers)
+
         def generate():
             for chunk in req.iter_content(chunk_size=8192):
                 if chunk:
                     yield chunk
-                    
+
         return app.response_class(
             generate(),
             mimetype=req.headers.get('content-type', 'application/octet-stream'),
@@ -118,14 +146,26 @@ def get_download_options():
 
     raw_format = data.get("format") or data.get("output_format") or "mp4"
     output_format = str(raw_format).strip().lower()
-
     if output_format not in ("mp4", "mp3"):
         return jsonify({"status": "error", "message": "Invalid format requested. Allowed formats are 'mp4' or 'mp3'."}), 400
 
     try:
         info = extract_info(source_url)
     except yt_dlp.utils.DownloadError as error:
-        app.logger.error(f"YouTube/Platform DownloadError details: {str(error)}")
+        error_msg = str(error).lower()
+        app.logger.error(f"DownloadError: {str(error)}")
+
+        if "sign in to confirm" in error_msg or "not a bot" in error_msg or "bot" in error_msg:
+            return jsonify({
+                "status": "error",
+                "message": "YouTube bot detection triggered. Please make sure cookies.txt is present and valid (from a logged-in account)."
+            }), 422
+        if "private" in error_msg or "login" in error_msg:
+            return jsonify({
+                "status": "error",
+                "message": "This video requires login. Cookies may be missing or expired."
+            }), 422
+
         return jsonify({"status": "error", "message": f"Unable to fetch media: {str(error)}"}), 422
     except Exception as e:
         app.logger.exception("Media information extraction failed")
@@ -134,7 +174,6 @@ def get_download_options():
     title = str(info.get("title") or "video")
     thumbnail = info.get("thumbnail") or ""
     raw_formats = info.get("formats", [])
-
     medias = []
 
     # --- MP3 Audio Formats ---
@@ -164,7 +203,6 @@ def get_download_options():
                 "quality": "MP3 High Quality",
                 "mimeType": "audio/mpeg"
             })
-
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": medias})
 
     # --- MP4 Video Formats ---
@@ -180,7 +218,6 @@ def get_download_options():
         format_id = str(f.get("format_id") or "").lower()
         format_note = str(f.get("format_note") or "").upper()
 
-        # Facebook හෝ YouTube වල height එක 0 ሆ් නැති වුණත් format_note හෝ width එකෙන් height එක අනුමාන කරගමු
         if height == 0:
             if "1080" in format_note or "HD" in format_note or width >= 1920:
                 height = 1080
@@ -195,8 +232,7 @@ def get_download_options():
             elif "sd" in format_id:
                 height = 480
 
-        # Facebook හෝ YouTube වල වීඩියෝ ස්ට්‍රීම්ස් අල්ලා ගැනීම
-        if height > 0 and (vcodec not in (None, "none") or "facebook.com" in source_url or "fb.watch" in source_url):
+        if height > 0 and (vcodec not in (None, "none") or "facebook.com" in source_url or "fb.watch" in source_url or "tiktok.com" in source_url):
             available_items.append({
                 "url": url,
                 "height": height,
@@ -228,8 +264,8 @@ def get_download_options():
             target_heights = sorted_heights[:3]
 
         target_heights = sorted(list(set(target_heights)), reverse=True)
-
         seen_urls = set()
+
         for h in target_heights:
             item = height_map[h]
             if item["url"] not in seen_urls:
