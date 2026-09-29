@@ -85,6 +85,10 @@ def extract_info(source_url):
             "Referer": "https://www.tiktok.com/",
         }
 
+    # Instagram වල audio සහ video එකට එන විදිහට format එක fix කිරීම
+    if "instagram.com" in source_url:
+        options["format"] = "best/bestvideo+bestaudio"
+
     with yt_dlp.YoutubeDL(options) as downloader:
         info = downloader.extract_info(source_url, download=False)
 
@@ -235,7 +239,8 @@ def get_download_options():
         if height > 0 and (vcodec not in (None, "none") or 
                            "facebook.com" in source_url or 
                            "fb.watch" in source_url or 
-                           "tiktok.com" in source_url):
+                           "tiktok.com" in source_url or
+                           "instagram.com" in source_url):
             available_items.append({
                 "url": url,
                 "height": height,
@@ -306,3 +311,4 @@ def get_download_options():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")))
+    
