@@ -214,7 +214,6 @@ def get_download_options():
         format_id = str(f.get("format_id") or "").lower()
         format_note = str(f.get("format_note") or "").upper()
 
-        # height 0 නම් අනුමාන කරනවා
         if height == 0:
             if "2160" in format_note or "4K" in format_note or width >= 3840:
                 height = 2160
@@ -244,7 +243,6 @@ def get_download_options():
             })
 
     if available_items:
-        # height අනුව unique map එකක් හදනවා
         height_map = {}
         for item in available_items:
             h = item["height"]
@@ -257,21 +255,18 @@ def get_download_options():
         target_heights = []
 
         if max_height > 1080:
-            # Keep the best format as an extra option above the standard tiers.
-            target_heights.append(max_height)  # Best
+            target_heights.append(max_height)
 
         for h in [1080, 720, 480]:
             if h in height_map:
                 target_heights.append(h)
             else:
-                # Use the nearest lower available height when a tier is missing.
                 lower = [x for x in sorted_heights if x <= h]
                 if lower:
                     best_lower = max(lower)
                     if best_lower not in target_heights:
                         target_heights.append(best_lower)
 
-        # duplicate ඉවත් කරලා
         target_heights = sorted(list(set(target_heights)), reverse=True)
 
         seen_urls = set()
@@ -285,14 +280,13 @@ def get_download_options():
                     quality_label = f"Best MP4 ({h}p)"
 
                 medias.append({
-                    "url": item["url"],          # <-- Direct download link (user browser එකෙන් download වෙනවා)
+                    "url": item["url"],
                     "type": "video",
                     "extension": item["ext"],
                     "quality": quality_label,
                     "height": h
                 })
 
-    # කිසිම format එකක් හම්බුනේ නැත්නම් fallback
     if not medias and info.get("url"):
         medias.append({
             "url": info.get("url"),
