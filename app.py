@@ -1,5 +1,4 @@
 import os
-import re
 from urllib.parse import urlparse
 import requests
 import yt_dlp
@@ -32,10 +31,9 @@ YTDL_BASE_OPTIONS = {
     "retries": 3,
     "fragment_retries": 3,
     "socket_timeout": 30,
-    "force_ipv4": True,  # YouTube datacenter IPv6 වලට ගොඩක් block කරනවා
+    "force_ipv4": True,
     "extractor_args": {
         "youtube": {
-            # 2026 දී හොඳට work වෙන clients
             "player_client": ["android_vr", "tv_downgraded", "mweb", "web"],
         },
         "instagram": {
@@ -55,7 +53,6 @@ YTDL_BASE_OPTIONS = {
     }
 }
 
-# cookies.txt තියෙනවා නම් automatically load වෙනවා
 if os.path.exists("cookies.txt"):
     YTDL_BASE_OPTIONS["cookiefile"] = "cookies.txt"
 
@@ -75,7 +72,6 @@ def extract_info(source_url):
     options = YTDL_BASE_OPTIONS.copy()
     options["skip_download"] = True
 
-    # Facebook සඳහා mobile User-Agent
     if "facebook.com" in source_url or "fb.watch" in source_url:
         options["http_headers"] = {
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
@@ -83,7 +79,6 @@ def extract_info(source_url):
             "Accept-Language": "en-US,en;q=0.9",
         }
 
-    # TikTok සඳහා
     if "tiktok.com" in source_url:
         options["http_headers"] = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -105,6 +100,7 @@ def health_check():
 
 @app.get("/api/proxy-download")
 def proxy_download():
+    # මේ endpoint එක use කරන්න එපා - Railway credit වැය වෙනවා
     target_url = request.args.get("url")
     filename = request.args.get("filename", "video.mp4")
     if not target_url:
@@ -176,7 +172,7 @@ def get_download_options():
     raw_formats = info.get("formats", [])
     medias = []
 
-    # --- MP3 Audio Formats ---
+    # ==================== MP3 Audio Formats ====================
     if output_format == "mp3":
         audio_streams = []
         for f in reversed(raw_formats):
@@ -205,7 +201,7 @@ def get_download_options():
             })
         return jsonify({"status": "success", "title": title, "thumbnail": thumbnail, "medias": medias})
 
-    # --- MP4 Video Formats ---
+    # ==================== MP4 Video Formats ====================
     available_items = []
     for f in raw_formats:
         url = f.get("url")
@@ -218,8 +214,13 @@ def get_download_options():
         format_id = str(f.get("format_id") or "").lower()
         format_note = str(f.get("format_note") or "").upper()
 
+        # height 0 නම් අනුමාන කරනවා
         if height == 0:
-            if "1080" in format_note or "HD" in format_note or width >= 1920:
+            if "2160" in format_note or "4K" in format_note or width >= 3840:
+                height = 2160
+            elif "1440" in format_note or width >= 2560:
+                height = 1440
+            elif "1080" in format_note or "HD" in format_note or width >= 1920:
                 height = 1080
             elif "720" in format_note or width >= 1280:
                 height = 720
@@ -232,7 +233,10 @@ def get_download_options():
             elif "sd" in format_id:
                 height = 480
 
-        if height > 0 and (vcodec not in (None, "none") or "facebook.com" in source_url or "fb.watch" in source_url or "tiktok.com" in source_url):
+        if height > 0 and (vcodec not in (None, "none") or 
+                           "facebook.com" in source_url or 
+                           "fb.watch" in source_url or 
+                           "tiktok.com" in source_url):
             available_items.append({
                 "url": url,
                 "height": height,
@@ -240,6 +244,7 @@ def get_download_options():
             })
 
     if available_items:
+        # height අනුව unique map එකක් හදනවා
         height_map = {}
         for item in available_items:
             h = item["height"]
@@ -250,34 +255,51 @@ def get_download_options():
         max_height = sorted_heights[0] if sorted_heights else 0
 
         target_heights = []
-        if max_height >= 1080:
-            for d in [max_height, 1080, 720, 480]:
-                if d in sorted_heights and d not in target_heights:
-                    target_heights.append(d)
+
+        if max_height > 1080:
+            # 1080p ට වඩා තියෙනවා නම් → Best + 1080 + 720 + 480
+            target_heights.append(max_height)  # Best
+
+            for h in [1080, 720, 480]:
+                if h in height_map:
+                    target_heights.append(h)
                 else:
-                    lower = [h for h in sorted_heights if h <= d]
+                    # ඒ height එක නැත්නම් ඊට ආසන්නම අඩු එක
+                    lower = [x for x in sorted_heights if x <= h]
                     if lower:
                         best_lower = max(lower)
                         if best_lower not in target_heights:
                             target_heights.append(best_lower)
         else:
-            target_heights = sorted_heights[:3]
+            # max 1080p හෝ ඊට අඩු නම් → Best + එක පහළ quality
+            target_heights.append(max_height)  # Best
 
+            lower_heights = [h for h in sorted_heights if h < max_height]
+            if lower_heights:
+                target_heights.append(max(lower_heights))
+
+        # duplicate ඉවත් කරලා
         target_heights = sorted(list(set(target_heights)), reverse=True)
-        seen_urls = set()
 
+        seen_urls = set()
         for h in target_heights:
             item = height_map[h]
             if item["url"] not in seen_urls:
                 seen_urls.add(item["url"])
+
+                quality_label = f"MP4 ({h}p)"
+                if h == max_height:
+                    quality_label = f"Best MP4 ({h}p)"
+
                 medias.append({
-                    "url": item["url"],
+                    "url": item["url"],          # <-- Direct download link (user browser එකෙන් download වෙනවා)
                     "type": "video",
                     "extension": item["ext"],
-                    "quality": f"MP4 ({h}p)",
+                    "quality": quality_label,
                     "height": h
                 })
 
+    # කිසිම format එකක් හම්බුනේ නැත්නම් fallback
     if not medias and info.get("url"):
         medias.append({
             "url": info.get("url"),
