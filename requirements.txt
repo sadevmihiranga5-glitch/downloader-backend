@@ -1,6 +1,6 @@
 Flask
 flask-cors
 requests
-yt-dlp
+yt-dlp[default]
 gunicorn
 werkzeug
