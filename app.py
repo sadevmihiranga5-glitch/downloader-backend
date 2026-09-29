@@ -257,26 +257,19 @@ def get_download_options():
         target_heights = []
 
         if max_height > 1080:
-            # 1080p ට වඩා තියෙනවා නම් → Best + 1080 + 720 + 480
+            # Keep the best format as an extra option above the standard tiers.
             target_heights.append(max_height)  # Best
 
-            for h in [1080, 720, 480]:
-                if h in height_map:
-                    target_heights.append(h)
-                else:
-                    # ඒ height එක නැත්නම් ඊට ආසන්නම අඩු එක
-                    lower = [x for x in sorted_heights if x <= h]
-                    if lower:
-                        best_lower = max(lower)
-                        if best_lower not in target_heights:
-                            target_heights.append(best_lower)
-        else:
-            # max 1080p හෝ ඊට අඩු නම් → Best + එක පහළ quality
-            target_heights.append(max_height)  # Best
-
-            lower_heights = [h for h in sorted_heights if h < max_height]
-            if lower_heights:
-                target_heights.append(max(lower_heights))
+        for h in [1080, 720, 480]:
+            if h in height_map:
+                target_heights.append(h)
+            else:
+                # Use the nearest lower available height when a tier is missing.
+                lower = [x for x in sorted_heights if x <= h]
+                if lower:
+                    best_lower = max(lower)
+                    if best_lower not in target_heights:
+                        target_heights.append(best_lower)
 
         # duplicate ඉවත් කරලා
         target_heights = sorted(list(set(target_heights)), reverse=True)
